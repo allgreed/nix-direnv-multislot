@@ -36,11 +36,52 @@
           let
             nix-direnv = pkgs.callPackage ./default.nix { };
             test_pkgs = pkgs.lib.callPackagesWith pkgs ./tests { inherit nix-direnv; };
+            mkBashOverlay =
+              functions:
+              pkgs.runCommand "bash_overlay"
+                {
+                  # TODO: does this have to be native?
+                  nativeBuildInputs = [ pkgs.gawk ];
+                }
+                # TODO: uncurse the vibe-coded impl, is this really the best way?
+                ''
+                  mkdir -p "$out"
+                  awk -v functions=${lib.escapeShellArg (lib.concatStringsSep " " functions)} '
+                    BEGIN {
+                      count = split(functions, names, " ")
+                      for (i = 1; i <= count; i++) wanted[names[i]] = 1
+                    }
+                    /^[A-Za-z_][A-Za-z0-9_]*[[:space:]]*\(\)/ {
+                      name = $0
+                      sub(/[[:space:]]*\(\).*/, "", name)
+                      printing = (name in wanted)
+                      if (printing) {
+                        found[name] = 1
+                        if (printed++) print ""
+                      }
+                    }
+                    printing { print }
+                    END {
+                      for (i = 1; i <= count; i++) {
+                        if (!(names[i] in found)) {
+                          printf "bash_overlay: function not found in direnvrc: %s\n", names[i] > "/dev/stderr"
+                          failed = 1
+                        }
+                      }
+                      exit failed
+                    }
+                  ' ${./direnvrc} > "$out/nix-direnv-multislot-overlay.sh"
+                '';
           in
           {
             packages = test_pkgs // {
               inherit nix-direnv;
               default = nix-direnv;
+              bash_overlay =
+                let
+                  fns_modified_vs_upstream = [ "use_flake" ];
+                in
+                  mkBashOverlay fns_modified_vs_upstream;
             };
 
             devShells.default = pkgs.callPackage ./shell.nix {

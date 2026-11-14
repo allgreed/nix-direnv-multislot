@@ -22,6 +22,7 @@ pkgs.mkShell {
         bats
         direnv
         shellcheck
+        nixfmt
         ;
     })
     ++ (builtins.attrValues (lib.attrsets.filterAttrs (name: _val: name != "direnv-stdlib") test_pkgs))

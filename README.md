@@ -6,7 +6,7 @@ Ben said to call it "multi**cache**" -- does that help?
 
 The upstream implementation catches only a single environment (technically: environment *script*), while this one allows for **much** more
 
-More [details in the original patch submission / issue] (https://github.com/nix-community/nix-direnv/issues/645)
+More [details in the original patch submission / issue](https://github.com/nix-community/nix-direnv/issues/645)
 
 ## Advantages
 - if you switch between branches that have a `flake.nix` diff between each other it's still fast
@@ -20,3 +20,12 @@ More [details in the original patch submission / issue] (https://github.com/nix-
 
 ## See [upstream](https://github.com/nix-community/nix-direnv)
 It has a [proper README with examples and everything](https://github.com/nix-community/nix-direnv)!
+
+## Bash overlay
+If you trust `nix-direnv` and don't want to audit the whole project from scratch there's an option to build just the *diff* from upstream on a per-function basis.
+A bit hacky? Mabye. ~130 lines to audit vs ~700? Deffinitely. Use it like so:
+
+```
+nix build .#bash_overlay
+. $(pwd)/result/nix-direnv-multislot-overlay.sh
+```
