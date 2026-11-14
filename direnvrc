@@ -303,14 +303,31 @@ use_flake() {
 
   watch_file "${files_to_watch[@]}"
 
-  local layout_dir profile
+  local layout_dir watches existing_watches=() merkle_watches file
   layout_dir=$(direnv_layout_dir)
-  profile="${layout_dir}/flake-profile$(_nix_argsum_suffix "$flake_expr")"
-  local profile_rc="${profile}.rc"
-  local flake_inputs="${layout_dir}/flake-inputs/"
-
-  local watches
   _nix_direnv_watches watches
+
+  for file in "${watches[@]}"; do
+    if [[ -e $file ]]; then
+      existing_watches+=("$file")
+    fi
+  done
+
+  if [[ ${#existing_watches[@]} -gt 0 ]]; then
+    if has sha512sum; then
+      merkle_watches=$(sha512sum -- "${existing_watches[@]}" | sort | sha512sum)
+    elif has shasum; then
+      merkle_watches=$(shasum -a 512 -- "${existing_watches[@]}" | sort | shasum -a 512)
+    fi
+    if [[ -n $merkle_watches ]]; then
+      read -r merkle_watches _ <<<"$merkle_watches"
+    fi
+  fi
+
+  local cache_entry_base="${layout_dir}/${merkle_watches}"
+  local profile="${cache_entry_base}_profile"
+  local profile_rc="${profile}.rc"
+  local flake_inputs="${cache_entry_base}-flake-inputs/"
 
   local profile_missing=0
   if [[ ! -e $profile ]]; then
@@ -324,26 +341,8 @@ use_flake() {
     profile_rc_missing=1
   fi
 
-  local file=
-  local newer_files=()
-  for file in "${watches[@]}"; do
-    if [[ $file -nt $profile_rc ]]; then
-      newer_files+=("$file")
-    fi
-  done
-
-  if [[ ${#newer_files[@]} -gt 0 ]]; then
-    local new_file_list
-    new_file_list="$(printf "  %s\n" "${newer_files[@]:0:5}")"
-    local and_n_more=""
-    if [[ ${#newer_files[@]} -gt 5 ]]; then
-      and_n_more="\n  and $((${#newer_files[@]} - 5)) more"
-    fi
-
-    _nix_direnv_info "$(printf "cache invalidated: files newer than cache:\n%s%s" "$new_file_list" "$and_n_more")"
-  fi
-
-  if [[ $profile_missing -eq 1 || $profile_rc_missing -eq 1 || ${#newer_files[@]} -gt 0 ]]; then
+  if [[ $profile_missing -eq 1 || $profile_rc_missing -eq 1 ]]; then
+    # shellcheck disable=SC2154
     if [[ $_nix_direnv_manual_reload -eq 1 && -z ${_nix_direnv_force_reload-} ]]; then
       _nix_direnv_warn_manual_reload "$profile_rc"
 
@@ -383,6 +382,7 @@ use_flake() {
         # but there may already be a prior profile_rc,
         # which is probably more useful than nothing.
         # Fallback to use that (which means just leaving profile_rc alone!)
+        # shellcheck disable=SC2154
         if [[ $_nix_direnv_allow_fallback -eq 1 ]]; then
           if [[ -e ${profile_rc} ]]; then
             _nix_direnv_warning "Evaluating current devShell failed. Falling back to previous environment! (See ${log_path} for more information)"
