@@ -399,7 +399,7 @@ use_flake() {
       fi
     fi
   else
-    _nix_direnv_info "Using cached dev shell"
+    _nix_direnv_info "Using a cached dev shell"
   fi
   # Watch the profile_rc file so that manual cache refreshes take effect. We
   # watch this at the end of the function, not the beginning, so that the cache
